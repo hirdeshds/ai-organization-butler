@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 31
+names: ['Bed', 'Cabinet', 'Charging-cable', 'Earphones', 'Glasses', 'Keys', 'Laptop', 'Lecture-notes', 'Marker', 'Mobile Phone', 'Mouse', 'Phone', 'Shelf', 'StudentID_card', 'Wallet', 'Watch', 'Water bottle', 'bag', 'bottle', 'chairs', 'desk', 'dress', 'jacket', 'jean', 'pants', 'polar', 'shirt', 'short', 'skirt', 'sofa', 'table']
+
+roboflow:
+  workspace: roomclutterdetection-3h7ce
+  project: room-clutter-detection-dmjpz
+  version: 1
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/roomclutterdetection-3h7ce/room-clutter-detection-dmjpz/dataset/1
