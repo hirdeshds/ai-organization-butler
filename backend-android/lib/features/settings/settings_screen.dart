@@ -15,6 +15,14 @@ class SettingsScreen extends StatelessWidget {
   static const surfaceDark = Color(0xFF1f1f26);
   static const borderDark = Color(0xFF2d2d34);
 
+  // Helper method to format TimeOfDay without context
+  String _formatTimeOfDay(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
@@ -61,13 +69,15 @@ class SettingsScreen extends StatelessWidget {
                     shape: BoxShape.circle,
                     border: Border.all(color: primaryTeal.withOpacity(0.2), width: 2),
                   ),
-                  child: ClipOval(
-                    child: Image.network(
-                      user.avatarUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: surfaceDark,
-                        child: const Icon(Icons.person, size: 48, color: Colors.white54),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: surfaceDark,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        user.emoji,
+                        style: const TextStyle(fontSize: 48),
                       ),
                     ),
                   ),
@@ -116,8 +126,10 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(user.name, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Text(user.email, style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+          if (user.email.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(user.email, style: TextStyle(color: Colors.grey[500], fontSize: 14)),
+          ],
         ],
       ),
     );
@@ -142,7 +154,7 @@ class SettingsScreen extends StatelessWidget {
           iconBgColor: primaryTeal.withOpacity(0.1),
           iconColor: primaryTeal,
           title: 'Decluttering Frequency',
-          subtitle: '${settings.scanFrequency} Smart Scan at ${settings.scheduledScanTime.format()}',
+          subtitle: '${settings.scanFrequency} Smart Scan at ${_formatTimeOfDay(settings.scheduledScanTime)}',
           onTap: () => _showFrequencyPicker(context, appState),
         ),
       ],
@@ -181,16 +193,36 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildStatsSection(BuildContext context, AppState appState) {
     final user = appState.user;
+    final hasStats = user.totalItemsSorted > 0 || user.streakDays > 0 || appState.cleanedRooms.isNotEmpty;
+    
     return _buildSection(
       title: 'YOUR STATS',
       children: [
-        Padding(
+        hasStats ? Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
               _StatItem(icon: Icons.inventory_2, value: '${user.totalItemsSorted}', label: 'Items Sorted'),
               _StatItem(icon: Icons.local_fire_department, value: '${user.streakDays}', label: 'Day Streak'),
               _StatItem(icon: Icons.home, value: '${appState.cleanedRooms.length}', label: 'Rooms Cleaned'),
+            ],
+          ),
+        ) : Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Icon(Icons.bar_chart_outlined, color: Colors.grey[600], size: 32),
+              const SizedBox(height: 12),
+              Text(
+                'No stats yet',
+                style: TextStyle(color: Colors.grey[500], fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Your statistics will appear here',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
@@ -352,42 +384,75 @@ class SettingsScreen extends StatelessWidget {
 
   void _showEditProfileSheet(BuildContext context, AppState appState) {
     final nameController = TextEditingController(text: appState.user.name);
-    final emailController = TextEditingController(text: appState.user.email);
+    String selectedEmoji = appState.user.emoji;
+    
+    final emojiOptions = [
+      '👤', '😊', '🎯', '✨', '🌟', '🚀',
+      '🎨', '💼', '🏠', '🌱', '🔥', '💪',
+    ];
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: surfaceDark,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Edit Profile', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 24),
-            _buildTextField('Name', nameController),
-            const SizedBox(height: 16),
-            _buildTextField('Email', emailController),
-            const SizedBox(height: 24),
-            GestureDetector(
-              onTap: () {
-                appState.updateUser(appState.user.copyWith(
-                  name: nameController.text,
-                  email: emailController.text,
-                ));
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated!')));
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(color: primaryTeal, borderRadius: BorderRadius.circular(12)),
-                child: const Center(child: Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setState) => Padding(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Edit Profile', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 24),
+              _buildTextField('Name', nameController),
+              const SizedBox(height: 24),
+              const Text('Profile Emoji', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: emojiOptions.map((emoji) {
+                  final isSelected = emoji == selectedEmoji;
+                  return GestureDetector(
+                    onTap: () => setState(() => selectedEmoji = emoji),
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: isSelected ? primaryTeal.withOpacity(0.2) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? primaryTeal : Colors.white.withOpacity(0.1),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(emoji, style: const TextStyle(fontSize: 24)),
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              GestureDetector(
+                onTap: () {
+                  appState.updateUser(appState.user.copyWith(
+                    name: nameController.text,
+                    emoji: selectedEmoji,
+                  ));
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated!')));
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(color: primaryTeal, borderRadius: BorderRadius.circular(12)),
+                  child: const Center(child: Text('Save Changes', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

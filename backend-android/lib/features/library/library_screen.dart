@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -22,25 +23,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
   List<Room> _getFilteredRooms(List<Room> rooms) {
     var filtered = rooms;
 
-    // Apply search filter
     if (_searchQuery.isNotEmpty) {
       filtered = filtered.where((r) => r.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     }
 
-    // Apply tab filter
     switch (_selectedFilter) {
-      case 1: // Recent
+      case 1:
         filtered = filtered.where((r) =>
         r.completedAt != null &&
             r.completedAt!.isAfter(DateTime.now().subtract(const Duration(days: 7)))
         ).toList();
         break;
-      case 2: // Spotless
+      case 2:
         filtered = filtered.where((r) => r.isSpotless).toList();
         break;
     }
 
-    // Sort by completion date
     filtered.sort((a, b) => (b.completedAt ?? DateTime(2000)).compareTo(a.completedAt ?? DateTime(2000)));
 
     return filtered;
@@ -49,7 +47,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
-      builder: (context, appState, _) {
+      builder: (context, appState, _){
         final rooms = _getFilteredRooms(appState.rooms);
 
         return Scaffold(
@@ -185,6 +183,46 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
+  // ✅ FIXED: Image loading helper method
+  Widget _buildRoomImage(Room room) {
+    // Check if imageUrl is a local file path
+    if (room.imageUrl.startsWith('/') || room.imageUrl.startsWith('file://')) {
+      final filePath = room.imageUrl.replaceFirst('file://', '');
+      final file = File(filePath);
+
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => _buildImagePlaceholder(),
+      );
+    }
+
+    // Network image (http/https)
+    if (room.imageUrl.startsWith('http')) {
+      return Image.network(
+        room.imageUrl,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        errorBuilder: (_, __, ___) => _buildImagePlaceholder(),
+      );
+    }
+
+    // Fallback placeholder
+    return _buildImagePlaceholder();
+  }
+
+  Widget _buildImagePlaceholder() {
+    return Container(
+      color: AppColors.cardDark,
+      child: const Center(
+        child: Icon(Icons.home, color: Colors.white24, size: 48),
+      ),
+    );
+  }
+
   Widget _buildRoomCard(BuildContext context, Room room, AppState appState) {
     return GestureDetector(
       onTap: () {
@@ -213,16 +251,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      room.imageUrl,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                      height: double.infinity,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: AppColors.cardDark,
-                        child: const Icon(Icons.home, color: Colors.white24, size: 48),
-                      ),
-                    ),
+                    // ✅ FIXED: Use helper method instead of Image.network
+                    child: _buildRoomImage(room),
                   ),
                 ),
                 // Status indicator
@@ -239,23 +269,40 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ),
                   ),
                 ),
-                // Score badge
-                if (!room.isSpotless)
-                  Positioned(
-                    bottom: 8,
-                    left: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'Score: ${room.clutterScore}',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w600),
-                      ),
+                // Score badge - More visible
+                Positioned(
+                  bottom: 8,
+                  left: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _getScoreColor(room.clutterScore),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.4),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.analytics, color: Colors.white, size: 12),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${room.clutterScore}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                ),
               ],
             ),
           ),
@@ -406,6 +453,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
       ),
     );
+  }
+
+  // Helper method for score color
+  Color _getScoreColor(int score) {
+    if (score < 30) return Colors.green;
+    if (score < 70) return Colors.orange;
+    return Colors.redAccent;
   }
 
   String _formatDate(DateTime date) {

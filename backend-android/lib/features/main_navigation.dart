@@ -1,8 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../core/theme/app_theme.dart';
-import '../core/state/app_state.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'library/library_screen.dart';
 import 'insights/insights_screen.dart';
@@ -88,12 +86,12 @@ class _BottomNavBar extends StatelessWidget {
             height: 72,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: AppColors.cardDark.withValues(alpha: 0.6),
+              color: AppColors.cardDark.withOpacity(0.6),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
+                  color: Colors.black.withOpacity(0.3),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
@@ -132,7 +130,7 @@ class _BottomNavBar extends StatelessWidget {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.4),
+                          color: AppColors.primary.withOpacity(0.4),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
@@ -195,7 +193,7 @@ class _NavItem extends StatelessWidget {
               child: Icon(
                 isActive ? activeIcon : icon,
                 key: ValueKey(isActive),
-                color: isActive ? AppColors.deepLavender : Colors.white.withValues(alpha: 0.4),
+                color: isActive ? AppColors.deepLavender : Colors.white.withOpacity(0.4),
                 size: 24,
               ),
             ),
@@ -203,7 +201,7 @@ class _NavItem extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: isActive ? AppColors.deepLavender : Colors.white.withValues(alpha: 0.4),
+                color: isActive ? AppColors.deepLavender : Colors.white.withOpacity(0.4),
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
               ),

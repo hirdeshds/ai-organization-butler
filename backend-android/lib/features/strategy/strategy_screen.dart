@@ -5,39 +5,179 @@ import '../../core/theme/app_theme.dart';
 import '../../core/state/app_state.dart';
 import '../../core/models/models.dart';
 
-class StrategyScreen extends StatelessWidget {
+class StrategyScreen extends StatefulWidget {
   const StrategyScreen({super.key});
+
+  @override
+  State<StrategyScreen> createState() => _StrategyScreenState();
+}
+
+class _StrategyScreenState extends State<StrategyScreen> with SingleTickerProviderStateMixin {
+  bool _hasNavigated = false;
+  bool _showCelebration = false;
+  late AnimationController _celebrationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _celebrationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+  }
+
+  @override
+  void dispose() {
+    _celebrationController.dispose();
+    super.dispose();
+  }
+
+  // ✅ Check if all tasks completed and navigate
+  void _checkCompletion(List<CleanupTask> tasks, AppState appState) {
+    if (_hasNavigated) return;
+
+    final completedCount = tasks.where((t) => t.isCompleted).length;
+    final totalCount = tasks.length;
+
+    if (completedCount == totalCount && totalCount > 0) {
+      _hasNavigated = true;
+      setState(() => _showCelebration = true);
+      _celebrationController.forward();
+
+      // Update room status and navigate after delay
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          final room = appState.currentRoom;
+          if (room != null) {
+            appState.updateRoom(room.copyWith(status: RoomStatus.cleaned));
+          }
+
+          Navigator.of(context).popUntil((route) => route.isFirst);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.celebration, color: Colors.white),
+                  SizedBox(width: 12),
+                  Text('🎉 Room cleaned! Great job!'),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, appState, _) {
-        final tasks = appState.tasks;
+        final currentRoom = appState.currentRoom;
+
+        // ✅ Get tasks for current room only
+        final tasks = currentRoom != null
+            ? appState.getTasksForRoom(currentRoom.id)
+            : <CleanupTask>[];
+
         final completedCount = tasks.where((t) => t.isCompleted).length;
         final progress = tasks.isEmpty ? 0.0 : completedCount / tasks.length;
-        final currentRoom = appState.currentRoom;
+
+        // ✅ Check completion after build
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _checkCompletion(tasks, appState);
+        });
 
         return Scaffold(
           backgroundColor: const Color(0xFF121216),
-          body: Column(
+          body: Stack(
             children: [
-              _buildHeader(context, currentRoom),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 24),
-                      _buildProgressSection(context, completedCount, tasks.length, progress),
-                      const SizedBox(height: 24),
-                      _buildTaskList(context, tasks, appState),
-                      const SizedBox(height: 24),
-                      _buildAITipCard(context, appState),
-                    ],
+              Column(
+                children: [
+                  _buildHeader(context, currentRoom),
+                  Expanded(
+                    child: tasks.isEmpty
+                        ? _buildEmptyState()
+                        : SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 24),
+                          _buildProgressSection(context, completedCount, tasks.length, progress),
+                          const SizedBox(height: 24),
+                          _buildTaskList(context, tasks, appState),
+                          const SizedBox(height: 24),
+                          _buildAITipCard(context, appState),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
+              // Celebration overlay
+              if (_showCelebration) _buildCelebrationOverlay(),
             ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.task_alt, size: 64, color: Colors.white.withOpacity(0.3)),
+          const SizedBox(height: 16),
+          Text(
+            'No tasks yet',
+            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 18),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Scan a room to generate cleanup tasks',
+            style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCelebrationOverlay() {
+    return AnimatedBuilder(
+      animation: _celebrationController,
+      builder: (context, child) {
+        return Container(
+          color: Colors.black.withOpacity(0.8 * _celebrationController.value),
+          child: Center(
+            child: ScaleTransition(
+              scale: CurvedAnimation(
+                parent: _celebrationController,
+                curve: Curves.elasticOut,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('🎉', style: TextStyle(fontSize: 80)),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Room Cleaned!',
+                    style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Great job! Returning to dashboard...',
+                    style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -95,9 +235,7 @@ class StrategyScreen extends StatelessWidget {
                   child: const Icon(Icons.more_vert, color: Colors.white, size: 20),
                 ),
                 color: AppColors.cardDark,
-                onSelected: (value) {
-                  // Handle menu actions
-                },
+                onSelected: (value) {},
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'reset', child: Text('Reset Tasks', style: TextStyle(color: Colors.white))),
                   const PopupMenuItem(value: 'share', child: Text('Share Progress', style: TextStyle(color: Colors.white))),
@@ -130,8 +268,22 @@ class StrategyScreen extends StatelessWidget {
               RichText(
                 text: TextSpan(
                   children: [
-                    TextSpan(text: '${(progress * 100).toInt()}', style: const TextStyle(color: Color(0xFFa65eed), fontSize: 32, fontWeight: FontWeight.w700)),
-                    const TextSpan(text: '%', style: TextStyle(color: Color(0xFFa65eed), fontSize: 18, fontWeight: FontWeight.w700)),
+                    TextSpan(
+                      text: '${(progress * 100).toInt()}',
+                      style: TextStyle(
+                        color: progress == 1.0 ? Colors.green : const Color(0xFFa65eed),
+                        fontSize: 32,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    TextSpan(
+                      text: '%',
+                      style: TextStyle(
+                        color: progress == 1.0 ? Colors.green : const Color(0xFFa65eed),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -139,7 +291,6 @@ class StrategyScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        // Progress bar
         Container(
           height: 8,
           decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(4)),
@@ -151,9 +302,14 @@ class StrategyScreen extends StatelessWidget {
                     duration: const Duration(milliseconds: 300),
                     width: constraints.maxWidth * progress,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFa65eed),
+                      color: progress == 1.0 ? Colors.green : const Color(0xFFa65eed),
                       borderRadius: BorderRadius.circular(4),
-                      boxShadow: [BoxShadow(color: const Color(0xFFa65eed).withOpacity(0.4), blurRadius: 15)],
+                      boxShadow: [
+                        BoxShadow(
+                          color: (progress == 1.0 ? Colors.green : const Color(0xFFa65eed)).withOpacity(0.4),
+                          blurRadius: 15,
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -168,14 +324,17 @@ class StrategyScreen extends StatelessWidget {
               : progress < 1.0
               ? 'Almost there! Your focus is peak.'
               : '🎉 All tasks completed!',
-          style: TextStyle(color: AppColors.textTertiary.withOpacity(0.8), fontSize: 12, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            color: progress == 1.0 ? Colors.green : AppColors.textTertiary.withOpacity(0.8),
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
     );
   }
 
   Widget _buildTaskList(BuildContext context, List<CleanupTask> tasks, AppState appState) {
-    // Sort tasks: incomplete first, then by priority
     final sortedTasks = [...tasks]..sort((a, b) {
       if (a.isCompleted != b.isCompleted) return a.isCompleted ? 1 : -1;
       return a.priority.compareTo(b.priority);
@@ -184,13 +343,14 @@ class StrategyScreen extends StatelessWidget {
     return Column(
       children: sortedTasks.map((task) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: _buildTaskCard(context, task, appState),
+        child: _buildTaskCard(context, task, appState, tasks),
       )).toList(),
     );
   }
 
-  Widget _buildTaskCard(BuildContext context, CleanupTask task, AppState appState) {
-    final isActive = !task.isCompleted && appState.tasks.where((t) => !t.isCompleted).first.id == task.id;
+  Widget _buildTaskCard(BuildContext context, CleanupTask task, AppState appState, List<CleanupTask> tasks) {
+    final incompleteTasks = tasks.where((t) => !t.isCompleted).toList();
+    final isActive = !task.isCompleted && incompleteTasks.isNotEmpty && incompleteTasks.first.id == task.id;
 
     return GestureDetector(
       onTap: () => appState.toggleTask(task.id),
@@ -198,15 +358,20 @@ class StrategyScreen extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A1A24),
+          color: task.isCompleted
+              ? Colors.green.withOpacity(0.1)
+              : const Color(0xFF1A1A24),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isActive ? const Color(0xFFa65eed).withOpacity(0.2) : Colors.white.withOpacity(0.08),
+            color: task.isCompleted
+                ? Colors.green.withOpacity(0.3)
+                : isActive
+                ? const Color(0xFFa65eed).withOpacity(0.2)
+                : Colors.white.withOpacity(0.08),
           ),
         ),
         child: Row(
           children: [
-            // Custom checkbox
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               width: 28,
@@ -214,7 +379,7 @@ class StrategyScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: task.isCompleted
-                    ? const RadialGradient(colors: [Color(0xFFA11BEB), Color(0xFF8822DD)])
+                    ? const RadialGradient(colors: [Colors.green, Color(0xFF22AA44)])
                     : null,
                 border: Border.all(
                   color: task.isCompleted
@@ -228,7 +393,6 @@ class StrategyScreen extends StatelessWidget {
               child: task.isCompleted ? const Icon(Icons.check, color: Colors.white, size: 16) : null,
             ),
             const SizedBox(width: 16),
-            // Task content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -240,7 +404,7 @@ class StrategyScreen extends StatelessWidget {
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                      decorationColor: const Color(0xFFa65eed).withOpacity(0.5),
+                      decorationColor: Colors.green.withOpacity(0.5),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -248,7 +412,6 @@ class StrategyScreen extends StatelessWidget {
                 ],
               ),
             ),
-            // Duration
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(

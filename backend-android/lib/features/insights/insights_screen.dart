@@ -74,6 +74,7 @@ class InsightsScreen extends StatelessWidget {
 
   Widget _buildWeeklyChart(BuildContext context, AppState appState) {
     final scores = appState.weeklyScores;
+    final hasData = scores.isNotEmpty && scores.any((s) => s > 0);
     final maxScore = 100;
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -84,7 +85,7 @@ class InsightsScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
-      child: Column(
+      child: hasData ? Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -98,33 +99,34 @@ class InsightsScreen extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: appState.scoreChange < 0
-                      ? AppColors.neonLime.withOpacity(0.1)
-                      : AppColors.softRose.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      appState.scoreChange < 0 ? Icons.trending_down : Icons.trending_up,
-                      color: appState.scoreChange < 0 ? AppColors.neonLime : AppColors.softRose,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${appState.scoreChange.abs()}%',
-                      style: TextStyle(
+              if (appState.scoreChange != 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: appState.scoreChange < 0
+                        ? AppColors.neonLime.withOpacity(0.1)
+                        : AppColors.softRose.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        appState.scoreChange < 0 ? Icons.trending_down : Icons.trending_up,
                         color: appState.scoreChange < 0 ? AppColors.neonLime : AppColors.softRose,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+                        size: 16,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 4),
+                      Text(
+                        '${appState.scoreChange.abs()}%',
+                        style: TextStyle(
+                          color: appState.scoreChange < 0 ? AppColors.neonLime : AppColors.softRose,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 32),
@@ -134,7 +136,7 @@ class InsightsScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: List.generate(7, (index) {
-                final score = scores[index];
+                final score = index < scores.length ? scores[index] : 0;
                 final height = (score / maxScore) * 120;
                 final isToday = index == 6;
 
@@ -144,15 +146,15 @@ class InsightsScreen extends StatelessWidget {
                     AnimatedContainer(
                       duration: Duration(milliseconds: 300 + (index * 50)),
                       width: 32,
-                      height: height,
+                      height: height > 0 ? height : 4,
                       decoration: BoxDecoration(
-                        gradient: isToday
+                        gradient: isToday && score > 0
                             ? AppColors.primaryGradient
                             : LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.white.withOpacity(0.2),
+                            Colors.white.withOpacity(score > 0 ? 0.2 : 0.05),
                             Colors.white.withOpacity(0.05),
                           ],
                         ),
@@ -174,11 +176,54 @@ class InsightsScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
+      ) : _buildEmptyChart(),
+    );
+  }
+
+  Widget _buildEmptyChart() {
+    return Column(
+      children: [
+        const Text(
+          'Weekly Progress',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 32),
+        SizedBox(
+          height: 150,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.bar_chart_outlined, color: Colors.white.withOpacity(0.3), size: 48),
+                const SizedBox(height: 16),
+                Text(
+                  'No data yet',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your progress will appear here over time',
+                  style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildStatsGrid(BuildContext context, AppState appState) {
+    final hasAnyData = appState.user.totalItemsSorted > 0 || 
+                       appState.user.streakDays > 0 || 
+                       appState.cleanedRooms.isNotEmpty ||
+                       appState.unlockedAchievements.isNotEmpty;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -192,50 +237,82 @@ class InsightsScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        Row(
+        hasAnyData ? Column(
           children: [
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.inventory_2,
-                value: '${appState.user.totalItemsSorted}',
-                label: 'Items Sorted',
-                color: AppColors.primary,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.inventory_2,
+                    value: '${appState.user.totalItemsSorted}',
+                    label: 'Items Sorted',
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.local_fire_department,
+                    value: '${appState.user.streakDays}',
+                    label: 'Day Streak',
+                    color: AppColors.neonLime,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.local_fire_department,
-                value: '${appState.user.streakDays}',
-                label: 'Day Streak',
-                color: AppColors.neonLime,
-              ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.home,
+                    value: '${appState.cleanedRooms.length}',
+                    label: 'Rooms Cleaned',
+                    color: AppColors.electricTeal,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildStatCard(
+                    icon: Icons.emoji_events,
+                    value: '${appState.unlockedAchievements.length}',
+                    label: 'Achievements',
+                    color: Colors.amber,
+                  ),
+                ),
+              ],
             ),
           ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.home,
-                value: '${appState.cleanedRooms.length}',
-                label: 'Rooms Cleaned',
-                color: AppColors.electricTeal,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildStatCard(
-                icon: Icons.emoji_events,
-                value: '${appState.unlockedAchievements.length}',
-                label: 'Achievements',
-                color: Colors.amber,
-              ),
-            ),
-          ],
-        ),
+        ) : _buildEmptyStatsCard(),
       ],
+    );
+  }
+
+  Widget _buildEmptyStatsCard() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: AppColors.cardDark,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.analytics_outlined, color: Colors.white.withOpacity(0.3), size: 48),
+          const SizedBox(height: 16),
+          Text(
+            'Your insights will improve as you use the app',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 14, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'AI adapts to your habits over time',
+            style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 
